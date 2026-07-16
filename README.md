@@ -3,6 +3,8 @@
 > ระบบตรวจจับและติดตามบุคคลแบบ Real-Time ด้วย YOLOv8 + DeepSORT  
 > **โปรเจคกลุ่ม | วิชา Computer Vision | มหาวิทยาลัย**
 
+> **v2.0 — Senior-Level Optimized Edition**
+
 ---
 
 ## 📌 ภาพรวมโปรเจค
@@ -20,12 +22,15 @@
 
 | ฟีเจอร์ | รายละเอียด |
 |---|---|
-| 🔍 Person Detection | ตรวจจับบุคคลในวิดีโอด้วย YOLOv8 (Confidence ≥ 65%) |
-| 🆔 Object Tracking | ติดตามแต่ละคนด้วย Unique ID ผ่าน DeepSORT |
-| 🔢 People Count | แสดงจำนวนบุคคลแบบ Real-Time บนเฟรม |
-| 📊 Detection % | แสดงเปอร์เซ็นต์ความมั่นใจในการตรวจจับ |
-| 🎬 Video Export | บันทึกวิดีโอผลลัพธ์พร้อม Timestamp อัตโนมัติ |
-| 🇹🇭 Thai UI | แสดงข้อความภาษาไทยบนเฟรม (ผ่าน Pillow + Tahoma Font) |
+| 🔍 Person Detection | YOLOv8 Conf≥45%, ตรวจจับคนที่ถูกบังได้มากขึ้น |
+| 🆔 Unique-Color Tracking | สีเฉพาะต่อ Track ID ผ่าน HSV colormap |
+| 🛤️ Trajectory Trail | แสดงเส้นทางการเดินย้อนหลัง 30 เฟรม |
+| 🔲 L-Shaped Corner Box | Bounding box สไตล์ professional |
+| 🔢 Real-Time Stats | จำนวนคน ปัจจุบัน + รวมทั้งหมด (unique) |
+| ⚡ FPS Counter | วัด FPS จริงแบบ rolling average |
+| ⏸️ Pause / Resume | กด `p` เพื่อหยุดชั่วคราว |
+| 🎬 Smart Video Export | บันทึก FPS และ resolution จริงจากวิดีโอต้นฉบับ |
+| 🇹🇭 Thai Stats Panel | Overlay ภาษาไทยกึ่งโปร่งใสมุมซ้ายบน |
 
 ---
 
@@ -115,22 +120,27 @@ pip install ultralytics deep-sort-realtime opencv-python pillow numpy
 
 ### detect_video.py
 
-| พารามิเตอร์ | ค่าปัจจุบัน | คำอธิบาย |
+| พารามิเตอร์ | ค่าใหม่ (Optimized) | คำอธิบาย |
 |---|---|---|
-| `conf` | `0.65` | Confidence threshold สำหรับ YOLO |
-| `iou` | `0.5` | IoU threshold สำหรับ NMS |
-| `max_age` | `50` | จำนวนเฟรมสูงสุดที่ DeepSORT ยังคง track ไว้ |
-| `n_init` | `2` | จำนวนเฟรมขั้นต่ำเพื่อยืนยัน track ใหม่ |
-| `max_cosine_distance` | `0.7` | ระยะทาง cosine สูงสุดสำหรับ re-identification |
+| `CONF_THRESHOLD` | `0.45` ↓ จาก 0.65 | เพิ่ม recall จับคนที่ถูกบังได้มากขึ้น |
+| `IOU_THRESHOLD` | `0.45` | NMS IoU threshold |
+| `DEEPSORT_MAX_AGE` | `70` ↑ จาก 50 | ติดตามได้นานขึ้นเมื่อหายชั่วคราว |
+| `DEEPSORT_N_INIT` | `3` ↑ จาก 2 | ลด false track เพิ่มความแม่นยำ |
+| `DEEPSORT_MAX_COS_DIST` | `0.5` ↓ จาก 0.7 | Re-ID เข้มงวดขึ้น ลด ID switch |
+| `TRAIL_LENGTH` | `30` | ความยาวเส้น trajectory |
 
 ### train.py
 
-| พารามิเตอร์ | ค่าปัจจุบัน | คำอธิบาย |
+| พารามิเตอร์ | ค่าใหม่ (Optimized) | คำอธิบาย |
 |---|---|---|
-| `epochs` | `50` | จำนวนรอบการเทรน |
-| `imgsz` | `640` | ขนาดภาพ input |
-| `batch` | `6` | Batch size |
-| `device` | `cuda` | ใช้ GPU ในการเทรน |
+| `optimizer` | `AdamW` | เสถียรกว่า SGD สำหรับ dataset ขนาดกลาง |
+| `lr0` | `0.001` | Initial learning rate |
+| `epochs` | `100` | มี Early Stopping (patience=20) |
+| `batch` | `16` | ปรับตาม VRAM (4GB→8, 8GB→16) |
+| `amp` | `True` | Mixed Precision ประหยัด VRAM ~40% |
+| `mosaic` | `1.0` | Augmentation รวม 4 ภาพ |
+| `mixup` | `0.15` | Augmentation ผสม 2 ภาพ |
+| `patience` | `20` | Early Stopping epochs |
 
 ---
 
@@ -138,10 +148,16 @@ pip install ultralytics deep-sort-realtime opencv-python pillow numpy
 
 ระบบจะแสดงผลลัพธ์บนเฟรมวิดีโอดังนี้:
 
-- **กรอบสีเขียว** รอบแต่ละบุคคลที่ตรวจพบ
-- **ID** ประจำแต่ละคนที่กำหนดโดย DeepSORT
-- **จำนวนคน** แสดงบนมุมซ้ายบน (ภาษาไทย)
-- **เปอร์เซ็นต์ความมั่นใจ** แสดงใต้กรอบแต่ละคน
+- **กรอบ L-shaped corners** สีเฉพาะต่อแต่ละ Track ID
+- **Trajectory trail** เส้นทางการเดินย้อนหลัง 30 เฟรม
+- **Label** `ID:X  0.87%` แสดง ID และ confidence ต่อคน
+- **Stats panel** มุมซ้ายบน: คนปัจจุบัน / รวมทั้งหมด / FPS / เฟรม
+
+### Controls
+| ปุ่ม | การทำงาน |
+|---|---|
+| `q` | ออกจากโปรแกรม |
+| `p` | Pause / Resume |
 
 ---
 
